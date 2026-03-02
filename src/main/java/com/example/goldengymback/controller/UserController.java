@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin(origins = "http://localhost:5173") // autorise le frontend
+@CrossOrigin(origins = {"http://localhost:5173", "https://medecin-front.vercel.app"})
 public class UserController {
 
     @Autowired
