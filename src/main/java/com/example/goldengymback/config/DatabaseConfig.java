@@ -11,7 +11,7 @@ import javax.sql.DataSource;
 import java.net.URI;
 
 @Configuration
-@Profile("prod")
+@Profile("production")
 public class DatabaseConfig {
 
     @Value("${DATABASE_URL:}")
@@ -35,7 +35,7 @@ public class DatabaseConfig {
             @Value("${DB_NAME:medecin}") String dbName,
             @Value("${DB_PASSWORD:}") String dbPassword) {
         
-        System.out.println("=== Configuration DataSource (profil prod) ===");
+        System.out.println("=== Configuration DataSource (profil production) ===");
         System.out.println("DATABASE_URL: " + (databaseUrl != null && !databaseUrl.isEmpty() ? "DÉFINI (masqué)" : "NON DÉFINI"));
         System.out.println("DB_HOST: " + (dbHost != null && !dbHost.isEmpty() ? dbHost : "NON DÉFINI"));
         System.out.println("DB_USER: " + (dbUser != null && !dbUser.isEmpty() ? dbUser : "NON DÉFINI"));
