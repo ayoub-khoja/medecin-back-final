@@ -86,7 +86,7 @@ public class DatabaseConfig {
                     .build();
         }
         
-        // Aucune configuration trouvée - échouer avec un message clair
+        // Aucune configuration trouvée - créer une DataSource factice qui échouera avec un message clair
         System.err.println("========================================");
         System.err.println("ERREUR : Configuration PostgreSQL manquante");
         System.err.println("========================================");
@@ -105,10 +105,17 @@ public class DatabaseConfig {
         System.err.println("Puis redéployez votre service.");
         System.err.println("========================================");
         
-        throw new RuntimeException(
-            "Configuration PostgreSQL manquante. " +
-            "Veuillez configurer DATABASE_URL ou les variables DB_* dans Render. " +
-            "Voir les instructions ci-dessus dans les logs."
-        );
+        // Créer une DataSource factice qui échouera lors de la connexion mais permettra à Hibernate de démarrer
+        // L'URL pointe vers un host inexistant pour échouer immédiatement avec un message clair
+        String fakeUrl = "jdbc:postgresql://POSTGRESQL_NOT_CONFIGURED:5432/PLEASE_CONFIGURE_DATABASE";
+        System.err.println("⚠ Création d'une DataSource factice pour permettre le démarrage de Hibernate.");
+        System.err.println("⚠ La connexion échouera avec un message d'erreur clair.");
+        
+        return DataSourceBuilder.create()
+                .url(fakeUrl)
+                .username("NOT_CONFIGURED")
+                .password("NOT_CONFIGURED")
+                .driverClassName("org.postgresql.Driver")
+                .build();
     }
 }
