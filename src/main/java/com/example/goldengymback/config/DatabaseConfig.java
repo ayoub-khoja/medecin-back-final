@@ -35,6 +35,14 @@ public class DatabaseConfig {
             @Value("${DB_NAME:medecin}") String dbName,
             @Value("${DB_PASSWORD:}") String dbPassword) {
         
+        System.out.println("=== Configuration DataSource (profil prod) ===");
+        System.out.println("DATABASE_URL: " + (databaseUrl != null && !databaseUrl.isEmpty() ? "DÉFINI (masqué)" : "NON DÉFINI"));
+        System.out.println("DB_HOST: " + (dbHost != null && !dbHost.isEmpty() ? dbHost : "NON DÉFINI"));
+        System.out.println("DB_USER: " + (dbUser != null && !dbUser.isEmpty() ? dbUser : "NON DÉFINI"));
+        System.out.println("DB_PORT: " + dbPort);
+        System.out.println("DB_NAME: " + dbName);
+        System.out.println("=============================================");
+        
         // Si DATABASE_URL est fourni (format Render), le parser
         if (databaseUrl != null && !databaseUrl.isEmpty() && databaseUrl.startsWith("postgresql://")) {
             try {
@@ -86,7 +94,7 @@ public class DatabaseConfig {
                     .build();
         }
         
-        // Aucune configuration trouvée - créer une DataSource factice qui échouera avec un message clair
+        // Aucune configuration trouvée - échouer avec un message clair
         System.err.println("========================================");
         System.err.println("ERREUR : Configuration PostgreSQL manquante");
         System.err.println("========================================");
@@ -105,17 +113,10 @@ public class DatabaseConfig {
         System.err.println("Puis redéployez votre service.");
         System.err.println("========================================");
         
-        // Créer une DataSource factice qui échouera lors de la connexion mais permettra à Hibernate de démarrer
-        // L'URL pointe vers un host inexistant pour échouer immédiatement avec un message clair
-        String fakeUrl = "jdbc:postgresql://POSTGRESQL_NOT_CONFIGURED:5432/PLEASE_CONFIGURE_DATABASE";
-        System.err.println("⚠ Création d'une DataSource factice pour permettre le démarrage de Hibernate.");
-        System.err.println("⚠ La connexion échouera avec un message d'erreur clair.");
-        
-        return DataSourceBuilder.create()
-                .url(fakeUrl)
-                .username("NOT_CONFIGURED")
-                .password("NOT_CONFIGURED")
-                .driverClassName("org.postgresql.Driver")
-                .build();
+        throw new RuntimeException(
+            "Configuration PostgreSQL manquante. " +
+            "Veuillez configurer DATABASE_URL ou les variables DB_* dans Render. " +
+            "Voir les instructions ci-dessus dans les logs."
+        );
     }
 }
