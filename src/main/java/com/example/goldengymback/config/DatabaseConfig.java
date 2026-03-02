@@ -1,7 +1,7 @@
 package com.example.goldengymback.config;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,20 +18,14 @@ public class DatabaseConfig {
     @Value("${DATABASE_URL:}")
     private String databaseUrl;
 
-    @Value("${DB_HOST:}")
-    private String dbHost;
-
-    @Value("${DB_USER:}")
-    private String dbUser;
-
+    /**
+     * Crée une DataSource depuis DATABASE_URL si elle est définie.
+     * Sinon, Spring Boot utilisera les propriétés spring.datasource.* de application-production.properties
+     */
     @Bean
     @Primary
-    @ConditionalOnExpression("!'${DATABASE_URL:}'.isEmpty() || (!'${DB_HOST:}'.isEmpty() && !'${DB_USER:}'.isEmpty())")
-    public DataSource dataSource(
-            @Value("${DB_PORT:5432}") String dbPort,
-            @Value("${DB_NAME:medecin}") String dbName,
-            @Value("${DB_PASSWORD:}") String dbPassword) {
-        
+    @ConditionalOnProperty(name = "DATABASE_URL")
+    public DataSource dataSource() {
         // Si DATABASE_URL est fourni (format Render), le parser
         if (databaseUrl != null && !databaseUrl.isEmpty() && databaseUrl.startsWith("postgresql://")) {
             try {
@@ -41,7 +35,7 @@ public class DatabaseConfig {
                 String host = uri.getHost();
                 int port = uri.getPort() == -1 ? 5432 : uri.getPort();
                 String path = uri.getPath();
-                String dbNameFromUrl = path.startsWith("/") ? path.substring(1) : path;
+                String dbName = path.startsWith("/") ? path.substring(1) : path;
                 
                 String username = "";
                 String password = "";
@@ -52,7 +46,7 @@ public class DatabaseConfig {
                 }
                 
                 // Construire l'URL JDBC
-                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbNameFromUrl);
+                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbName);
                 
                 System.out.println("✓ Configuration DataSource depuis DATABASE_URL: " + jdbcUrl);
                 
@@ -69,22 +63,6 @@ public class DatabaseConfig {
             }
         }
         
-        // Sinon, utiliser les variables séparées
-        if (dbHost != null && !dbHost.isEmpty() && dbUser != null && !dbUser.isEmpty()) {
-            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", dbHost, dbPort, dbName);
-            System.out.println("✓ Configuration DataSource depuis variables séparées: " + jdbcUrl);
-            
-            return DataSourceBuilder.create()
-                    .url(jdbcUrl)
-                    .username(dbUser)
-                    .password(dbPassword)
-                    .driverClassName("org.postgresql.Driver")
-                    .build();
-        }
-        
-        throw new RuntimeException(
-            "Aucune configuration PostgreSQL trouvée. " +
-            "Définissez soit DATABASE_URL, soit DB_HOST + DB_USER + DB_PASSWORD dans Render."
-        );
+        throw new RuntimeException("DATABASE_URL n'est pas au format attendu (postgresql://...)");
     }
 }
