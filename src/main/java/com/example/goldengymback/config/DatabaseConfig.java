@@ -1,6 +1,7 @@
 package com.example.goldengymback.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +20,7 @@ public class DatabaseConfig {
 
     @Bean
     @Primary
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "DATABASE_URL")
+    @ConditionalOnExpression("!'${DATABASE_URL:}'.isEmpty()")
     public DataSource dataSource() {
         // Si DATABASE_URL est fourni (format Render), le parser
         if (databaseUrl != null && !databaseUrl.isEmpty() && databaseUrl.startsWith("postgresql://")) {
@@ -42,6 +43,8 @@ public class DatabaseConfig {
                 
                 // Construire l'URL JDBC
                 String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbName);
+                
+                System.out.println("Configuration DataSource depuis DATABASE_URL: " + jdbcUrl);
                 
                 return DataSourceBuilder.create()
                         .url(jdbcUrl)
