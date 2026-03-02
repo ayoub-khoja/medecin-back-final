@@ -23,37 +23,37 @@ public class DatabaseConfig {
     @Value("${DB_USER:}")
     private String dbUser;
 
-    /**
-     * Crée toujours une DataSource pour le profil prod.
-     * Utilise DATABASE_URL si disponible, sinon les variables séparées.
-     * Échoue avec un message clair si aucune configuration n'est trouvée.
-     */
     @Bean
     @Primary
     public DataSource dataSource(
             @Value("${DB_PORT:5432}") String dbPort,
             @Value("${DB_NAME:medecin}") String dbName,
             @Value("${DB_PASSWORD:}") String dbPassword) {
-        
+
         System.out.println("=== Configuration DataSource (profil prod) ===");
-        System.out.println("DATABASE_URL: " + (databaseUrl != null && !databaseUrl.isEmpty() ? "DÉFINI (masqué)" : "NON DÉFINI"));
-        System.out.println("DB_HOST: " + (dbHost != null && !dbHost.isEmpty() ? dbHost : "NON DÉFINI"));
-        System.out.println("DB_USER: " + (dbUser != null && !dbUser.isEmpty() ? dbUser : "NON DÉFINI"));
-        System.out.println("DB_PORT: " + dbPort);
-        System.out.println("DB_NAME: " + dbName);
+        System.out.println("DATABASE_URL present: " + (databaseUrl != null && !databaseUrl.isEmpty()));
+        System.out.println("DB_HOST: " + (dbHost != null && !dbHost.isEmpty() ? dbHost : "NOT SET"));
         System.out.println("=============================================");
-        
-        // Si DATABASE_URL est fourni (format Render), le parser
-        if (databaseUrl != null && !databaseUrl.isEmpty() && databaseUrl.startsWith("postgresql://")) {
+
+        // Priorité 1 : DATABASE_URL (format Render automatique)
+        // Render peut fournir postgres:// ou postgresql://
+        if (databaseUrl != null && !databaseUrl.isEmpty()
+                && (databaseUrl.startsWith("postgresql://") || databaseUrl.startsWith("postgres://"))) {
             try {
-                // Format: postgresql://user:password@host:port/dbname
-                URI uri = new URI(databaseUrl.replace("postgresql://", "http://"));
+                // Normaliser : remplacer postgres:// par postgresql://
+                String normalizedUrl = databaseUrl;
+                if (normalizedUrl.startsWith("postgres://") && !normalizedUrl.startsWith("postgresql://")) {
+                    normalizedUrl = "postgresql://" + normalizedUrl.substring("postgres://".length());
+                }
+
+                // Parser avec URI (remplacer le scheme pour éviter les erreurs)
+                URI uri = new URI(normalizedUrl.replace("postgresql://", "http://"));
                 String userInfo = uri.getUserInfo();
                 String host = uri.getHost();
                 int port = uri.getPort() == -1 ? 5432 : uri.getPort();
                 String path = uri.getPath();
-                String dbNameFromUrl = path.startsWith("/") ? path.substring(1) : path;
-                
+                String dbNameFromUrl = (path != null && path.startsWith("/")) ? path.substring(1) : path;
+
                 String username = "";
                 String password = "";
                 if (userInfo != null && userInfo.contains(":")) {
@@ -61,12 +61,13 @@ public class DatabaseConfig {
                     username = credentials[0];
                     password = credentials.length > 1 ? credentials[1] : "";
                 }
-                
-                // Construire l'URL JDBC
-                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbNameFromUrl);
-                
-                System.out.println("✓ Configuration DataSource depuis DATABASE_URL: " + jdbcUrl);
-                
+
+                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?sslmode=require", host, port, dbNameFromUrl);
+
+                System.out.println("DataSource from DATABASE_URL -> " + jdbcUrl);
+                System.out.println("Username: " + username);
+                System.out.println("Host: " + host + ", Port: " + port + ", DB: " + dbNameFromUrl);
+
                 return DataSourceBuilder.create()
                         .url(jdbcUrl)
                         .username(username)
@@ -74,18 +75,17 @@ public class DatabaseConfig {
                         .driverClassName("org.postgresql.Driver")
                         .build();
             } catch (Exception e) {
-                System.err.println("✗ Erreur lors du parsing de DATABASE_URL: " + e.getMessage());
+                System.err.println("ERROR parsing DATABASE_URL: " + e.getMessage());
                 e.printStackTrace();
-                throw new RuntimeException("Impossible de configurer la DataSource depuis DATABASE_URL", e);
+                throw new RuntimeException("Cannot configure DataSource from DATABASE_URL", e);
             }
         }
-        
-        // Sinon, utiliser les variables séparées
-        if (dbHost != null && !dbHost.isEmpty() && !dbHost.equals("REQUIRED") &&
-            dbUser != null && !dbUser.isEmpty() && !dbUser.equals("REQUIRED")) {
-            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", dbHost, dbPort, dbName);
-            System.out.println("✓ Configuration DataSource depuis variables séparées: " + jdbcUrl);
-            
+
+        // Priorité 2 : Variables séparées DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
+        if (dbHost != null && !dbHost.isEmpty()) {
+            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s?sslmode=require", dbHost, dbPort, dbName);
+            System.out.println("DataSource from separate vars -> " + jdbcUrl);
+
             return DataSourceBuilder.create()
                     .url(jdbcUrl)
                     .username(dbUser)
@@ -93,30 +93,11 @@ public class DatabaseConfig {
                     .driverClassName("org.postgresql.Driver")
                     .build();
         }
-        
-        // Aucune configuration trouvée - échouer avec un message clair
-        System.err.println("========================================");
-        System.err.println("ERREUR : Configuration PostgreSQL manquante");
-        System.err.println("========================================");
-        System.err.println("Aucune configuration PostgreSQL trouvée dans Render.");
-        System.err.println("");
-        System.err.println("Pour corriger cela :");
-        System.err.println("1. Créez une base PostgreSQL dans Render");
-        System.err.println("2. Liez-la à votre service backend (cela ajoutera automatiquement DATABASE_URL)");
-        System.err.println("3. OU définissez les variables d'environnement suivantes dans Render :");
-        System.err.println("   - DB_HOST (ex: dpg-xxxxx-a.oregon-postgres.render.com)");
-        System.err.println("   - DB_PORT (défaut: 5432)");
-        System.err.println("   - DB_NAME (ex: medecin_db)");
-        System.err.println("   - DB_USER (ex: medecin_user)");
-        System.err.println("   - DB_PASSWORD");
-        System.err.println("");
-        System.err.println("Puis redéployez votre service.");
-        System.err.println("========================================");
-        
-        throw new RuntimeException(
-            "Configuration PostgreSQL manquante. " +
-            "Veuillez configurer DATABASE_URL ou les variables DB_* dans Render. " +
-            "Voir les instructions ci-dessus dans les logs."
-        );
+
+        // Aucune configuration
+        String msg = "ERREUR: Aucune config PostgreSQL trouvee! "
+                + "Ajoutez DATABASE_URL dans Render (liez votre base PostgreSQL au service).";
+        System.err.println(msg);
+        throw new RuntimeException(msg);
     }
 }
