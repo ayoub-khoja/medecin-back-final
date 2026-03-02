@@ -18,10 +18,20 @@ public class DatabaseConfig {
     @Value("${DATABASE_URL:}")
     private String databaseUrl;
 
+    @Value("${DB_HOST:}")
+    private String dbHost;
+
+    @Value("${DB_USER:}")
+    private String dbUser;
+
     @Bean
     @Primary
-    @ConditionalOnExpression("!'${DATABASE_URL:}'.isEmpty()")
-    public DataSource dataSource() {
+    @ConditionalOnExpression("!'${DATABASE_URL:}'.isEmpty() || (!'${DB_HOST:}'.isEmpty() && !'${DB_USER:}'.isEmpty())")
+    public DataSource dataSource(
+            @Value("${DB_PORT:5432}") String dbPort,
+            @Value("${DB_NAME:medecin}") String dbName,
+            @Value("${DB_PASSWORD:}") String dbPassword) {
+        
         // Si DATABASE_URL est fourni (format Render), le parser
         if (databaseUrl != null && !databaseUrl.isEmpty() && databaseUrl.startsWith("postgresql://")) {
             try {
@@ -31,7 +41,7 @@ public class DatabaseConfig {
                 String host = uri.getHost();
                 int port = uri.getPort() == -1 ? 5432 : uri.getPort();
                 String path = uri.getPath();
-                String dbName = path.startsWith("/") ? path.substring(1) : path;
+                String dbNameFromUrl = path.startsWith("/") ? path.substring(1) : path;
                 
                 String username = "";
                 String password = "";
@@ -42,9 +52,9 @@ public class DatabaseConfig {
                 }
                 
                 // Construire l'URL JDBC
-                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbName);
+                String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbNameFromUrl);
                 
-                System.out.println("Configuration DataSource depuis DATABASE_URL: " + jdbcUrl);
+                System.out.println("✓ Configuration DataSource depuis DATABASE_URL: " + jdbcUrl);
                 
                 return DataSourceBuilder.create()
                         .url(jdbcUrl)
@@ -53,11 +63,28 @@ public class DatabaseConfig {
                         .driverClassName("org.postgresql.Driver")
                         .build();
             } catch (Exception e) {
-                System.err.println("Erreur lors du parsing de DATABASE_URL: " + e.getMessage());
+                System.err.println("✗ Erreur lors du parsing de DATABASE_URL: " + e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException("Impossible de configurer la DataSource depuis DATABASE_URL", e);
             }
         }
-        throw new RuntimeException("DATABASE_URL n'est pas au format attendu (postgresql://...)");
+        
+        // Sinon, utiliser les variables séparées
+        if (dbHost != null && !dbHost.isEmpty() && dbUser != null && !dbUser.isEmpty()) {
+            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", dbHost, dbPort, dbName);
+            System.out.println("✓ Configuration DataSource depuis variables séparées: " + jdbcUrl);
+            
+            return DataSourceBuilder.create()
+                    .url(jdbcUrl)
+                    .username(dbUser)
+                    .password(dbPassword)
+                    .driverClassName("org.postgresql.Driver")
+                    .build();
+        }
+        
+        throw new RuntimeException(
+            "Aucune configuration PostgreSQL trouvée. " +
+            "Définissez soit DATABASE_URL, soit DB_HOST + DB_USER + DB_PASSWORD dans Render."
+        );
     }
 }
